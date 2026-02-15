@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, 
-  Search, 
-  CheckSquare, 
+import {
+  LayoutDashboard,
+  Search,
+  CheckSquare,
   Newspaper,
   Package,
   LogOut,
   Bell,
-  Settings
+  Settings,
+  Wrench
 } from 'lucide-react';
 import Overview from './components/Overview';
 import SEO from './components/SEO';
@@ -15,6 +16,7 @@ import Tasks from './components/Tasks';
 import News from './components/News';
 import Stock from './components/Stock';
 import Auth from './components/Auth';
+import Setup from './components/Setup';
 import ApiService from './services/api';
 import './App.css';
 
@@ -48,6 +50,7 @@ function App() {
     { id: 'seo', label: 'SEO', icon: Search },
     { id: 'tasks', label: 'Tâches', icon: CheckSquare },
     { id: 'news', label: 'Actualités', icon: Newspaper },
+    { id: 'setup', label: 'Configuration', icon: Wrench },
   ];
 
   const renderContent = () => {
@@ -66,6 +69,8 @@ function App() {
         return isAuthenticated ? <Tasks /> : <Auth onAuthChange={handleAuthChange} />;
       case 'news':
         return <News />;
+      case 'setup':
+        return <Setup />;
       default:
         return <Overview isAuthenticated={isAuthenticated} />;
     }
@@ -75,9 +80,9 @@ function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="logo-container">
-          <img 
-            src="/assets/logo-safehdf.png" 
-            alt="Safe HDF" 
+          <img
+            src="/assets/logo-safehdf.png"
+            alt="Safe HDF"
             className="logo"
             onError={(e) => {
               e.target.style.display = 'none';
@@ -89,7 +94,7 @@ function App() {
             <span className="logo-text-hdf">H.D.F</span>
           </div>
         </div>
-        
+
         <nav className="nav">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -133,7 +138,7 @@ function App() {
             </div>
           </div>
         </header>
-        
+
         <div className="content">
           {renderContent()}
         </div>
