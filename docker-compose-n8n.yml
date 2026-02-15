@@ -1,0 +1,38 @@
+# SafeApp - Docker Compose avec n8n support
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: safeapp-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - safeapp-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_USE_N8N: "true"
+        REACT_APP_N8N_URL: "https://n8n.superprojetx.com"
+        REACT_APP_API_URL: "http://31.97.155.126:3000"
+    container_name: safeapp-frontend
+    ports:
+      - "3001:80"
+    environment:
+      - REACT_APP_USE_N8N=true
+      - REACT_APP_N8N_URL=https://n8n.superprojetx.com
+    networks:
+      - safeapp-network
+    restart: unless-stopped
+
+networks:
+  safeapp-network:
+    driver: bridge
