@@ -1,30 +1,40 @@
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const API_URL = process.env.REACT_APP_API_URL || window.location.origin.replace('dashboard', 'api');
 
 class ApiService {
   // Authentification
   static async getAuthUrl() {
-    const res = await fetch(`${API_URL}/auth/url`);
+    const res = await fetch(`${API_URL}/auth/url`, {
+      credentials: 'include'
+    });
     return res.json();
   }
 
   static async getAuthStatus() {
-    const res = await fetch(`${API_URL}/auth/status`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/auth/status`, { 
+      credentials: 'include' 
+    });
     return res.json();
   }
 
   static async logout() {
-    const res = await fetch(`${API_URL}/auth/logout`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/auth/logout`, { 
+      credentials: 'include' 
+    });
     return res.json();
   }
 
   // Google Tasks
   static async getTaskLists() {
-    const res = await fetch(`${API_URL}/api/tasks/lists`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/api/tasks/lists`, { 
+      credentials: 'include' 
+    });
     return res.json();
   }
 
   static async getTasks(listId) {
-    const res = await fetch(`${API_URL}/api/tasks/${listId}`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/api/tasks/${listId}`, { 
+      credentials: 'include' 
+    });
     return res.json();
   }
 
@@ -58,27 +68,35 @@ class ApiService {
 
   // Search Console
   static async getSearchConsoleSites() {
-    const res = await fetch(`${API_URL}/api/searchconsole/sites`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/api/searchconsole/sites`, { 
+      credentials: 'include' 
+    });
     return res.json();
   }
 
   static async getSearchConsoleData(siteUrl, startDate, endDate) {
     const params = new URLSearchParams({ siteUrl, startDate, endDate });
-    const res = await fetch(`${API_URL}/api/searchconsole/data?${params}`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/api/searchconsole/data?${params}`, { 
+      credentials: 'include' 
+    });
     return res.json();
   }
 
   // Calendar
   static async getCalendarEvents(timeMin, timeMax) {
     const params = new URLSearchParams({ timeMin, timeMax });
-    const res = await fetch(`${API_URL}/api/calendar/events?${params}`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/api/calendar/events?${params}`, { 
+      credentials: 'include' 
+    });
     return res.json();
   }
 
   // Stock (Google Sheets)
   static async getStock(spreadsheetId, range) {
     const params = new URLSearchParams({ spreadsheetId, range });
-    const res = await fetch(`${API_URL}/api/stock?${params}`, { credentials: 'include' });
+    const res = await fetch(`${API_URL}/api/stock?${params}`, { 
+      credentials: 'include' 
+    });
     return res.json();
   }
 
