@@ -1,0 +1,32 @@
+# SafeApp - Docker Compose avec Nginx unifié
+# Tout passe par https://safe.superprojetx.com (même domaine)
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: safeapp-backend
+    expose:
+      - "3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - safeapp-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: safeapp-frontend
+    expose:
+      - "80"
+    networks:
+      - safeapp-network
+    restart: unless-stopped
+
+networks:
+  safeapp-network:
+    driver: bridge
