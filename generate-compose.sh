@@ -1,5 +1,14 @@
+#!/bin/bash
+# Génère un docker-compose.yml avec les credentials hardcodés
+# Usage: ./generate-compose.sh "CLIENT_ID" "CLIENT_SECRET"
+
+CLIENT_ID="${1:-YOUR_CLIENT_ID}"
+CLIENT_SECRET="${2:-YOUR_CLIENT_SECRET}"
+SESSION_SECRET="$(openssl rand -hex 32)"
+
+cat > docker-compose.yml << EOF
 # SafeApp - Docker Compose
-# Variables d'environnement à définir dans l'interface Docker ou via fichier .env
+# Généré automatiquement avec les credentials
 
 services:
   backend:
@@ -12,14 +21,12 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CLIENT_ID=${CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=https://safeapi.superprojetx.com/auth/callback
       - FRONTEND_URL=https://safe.superprojetx.com
       - API_URL=https://safeapi.superprojetx.com
-      - SESSION_SECRET=${SESSION_SECRET:-changez-moi-en-production}
-    volumes:
-      - ./backend/.env:/app/.env:ro
+      - SESSION_SECRET=${SESSION_SECRET}
     restart: unless-stopped
     networks:
       - safeapp-network
@@ -42,3 +49,13 @@ services:
 networks:
   safeapp-network:
     driver: bridge
+EOF
+
+echo "✅ docker-compose.yml généré avec succès!"
+echo ""
+echo "Variables configurées:"
+echo "  GOOGLE_CLIENT_ID: ${CLIENT_ID:0:20}..."
+echo "  GOOGLE_CLIENT_SECRET: ${CLIENT_SECRET:0:10}..."
+echo "  SESSION_SECRET: ${SESSION_SECRET:0:20}..."
+echo ""
+echo "Pour déployer: docker-compose up -d --build"
