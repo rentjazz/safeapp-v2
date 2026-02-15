@@ -12,14 +12,12 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URI=https://safeapi.superprojetx.com/auth/callback
       - FRONTEND_URL=https://safe.superprojetx.com
       - API_URL=https://safeapi.superprojetx.com
-      - SESSION_SECRET=${SESSION_SECRET:-changez-moi-en-production}
-    volumes:
-      - ./backend/.env:/app/.env:ro
+      - SESSION_SECRET=${SESSION_SECRET:-safeapp-default-secret-change-me}
     restart: unless-stopped
     networks:
       - safeapp-network
