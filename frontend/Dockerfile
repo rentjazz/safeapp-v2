@@ -3,17 +3,24 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first (for better caching)
+# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
 # Copy source code
 COPY . .
 
 # Build the app
+ARG REACT_APP_API_URL
+ENV REACT_APP_API_URL=${REACT_APP_API_URL}
 RUN npm run build
+
+# Replace API URL in config.js
+RUN if [ ! -z "$REACT_APP_API_URL" ]; then \
+    sed -i "s|%REACT_APP_API_URL%|$REACT_APP_API_URL|g" build/config.js; \
+  else \
+    sed -i "s|%REACT_APP_API_URL%|http://31.97.155.126:3000|g" build/config.js; \
+  fi
 
 # Production stage with nginx
 FROM nginx:alpine

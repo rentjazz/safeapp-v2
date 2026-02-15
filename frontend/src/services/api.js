@@ -1,26 +1,50 @@
-const API_URL = process.env.REACT_APP_API_URL || 'https://safeapi.superprojetx.com';
+// Get API URL from multiple sources
+const getApiUrl = () => {
+  // 1. From window.APP_CONFIG (runtime config)
+  if (window.APP_CONFIG && window.APP_CONFIG.API_URL && !window.APP_CONFIG.API_URL.includes('%')) {
+    return window.APP_CONFIG.API_URL;
+  }
+  // 2. From environment variable (build time)
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  // 3. Default
+  return 'http://31.97.155.126:3000';
+};
+
+const API_URL = getApiUrl();
+
+console.log('API URL configured:', API_URL);
 
 class ApiService {
   // Admin config
   static async getConfigStatus() {
     try {
       const res = await fetch(`${API_URL}/admin/config/status`);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     } catch (e) {
-      return { googleConfigured: false };
+      console.error('getConfigStatus error:', e);
+      return { googleConfigured: false, error: e.message };
     }
   }
 
   static async configureGoogle(clientId, clientSecret) {
-    const res = await fetch(`${API_URL}/admin/config`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        GOOGLE_CLIENT_ID: clientId,
-        GOOGLE_CLIENT_SECRET: clientSecret
-      })
-    });
-    return res.json();
+    try {
+      const res = await fetch(`${API_URL}/admin/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          GOOGLE_CLIENT_ID: clientId,
+          GOOGLE_CLIENT_SECRET: clientSecret
+        })
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    } catch (e) {
+      console.error('configureGoogle error:', e);
+      throw e;
+    }
   }
 
   // Authentification

@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Settings, 
-  CheckCircle, 
+import {
+  Settings,
+  CheckCircle,
   AlertCircle,
   Save,
   ExternalLink
 } from 'lucide-react';
 import ApiService from '../services/api';
+
+// Debug: show API URL
+const API_URL = window.APP_CONFIG?.API_URL || process.env.REACT_APP_API_URL || 'http://31.97.155.126:3000';
 
 function Setup() {
   const [clientId, setClientId] = useState('');
@@ -51,6 +54,19 @@ function Setup() {
   return (
     <div className="setup-page" style={{ maxWidth: '600px', margin: '0 auto', padding: '24px' }}>
       <div className="card">
+        {/* Debug info */}
+        <div style={{ 
+          padding: '12px', 
+          background: 'rgba(255,255,255,0.05)', 
+          borderRadius: '8px',
+          marginBottom: '16px',
+          fontSize: '12px',
+          fontFamily: 'monospace',
+          color: 'var(--text-secondary)'
+        }}>
+          API URL: {API_URL}
+        </div>
+        
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{ 
             width: '64px', 
