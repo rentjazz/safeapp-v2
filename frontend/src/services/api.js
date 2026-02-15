@@ -1,47 +1,67 @@
-const API_URL = process.env.REACT_APP_API_URL || window.location.origin.replace('dashboard', 'api');
+const API_URL = process.env.REACT_APP_API_URL || 'https://safeapi.superprojetx.com';
+
+console.log('API URL:', API_URL); // Debug
 
 class ApiService {
-  // Authentification
   static async getAuthUrl() {
+    console.log('Fetching auth URL from:', `${API_URL}/auth/url`);
     const res = await fetch(`${API_URL}/auth/url`, {
-      credentials: 'include'
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/json',
+      }
     });
+    if (!res.ok) throw new Error('Erreur réseau');
     return res.json();
   }
 
   static async getAuthStatus() {
-    const res = await fetch(`${API_URL}/auth/status`, { 
-      credentials: 'include' 
-    });
-    return res.json();
+    try {
+      const res = await fetch(`${API_URL}/auth/status`, { 
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!res.ok) return { connected: false };
+      return res.json();
+    } catch (e) {
+      console.error('Auth status error:', e);
+      return { connected: false };
+    }
   }
 
   static async logout() {
     const res = await fetch(`${API_URL}/auth/logout`, { 
-      credentials: 'include' 
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
     });
     return res.json();
   }
 
-  // Google Tasks
   static async getTaskLists() {
     const res = await fetch(`${API_URL}/api/tasks/lists`, { 
-      credentials: 'include' 
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
     });
+    if (!res.ok) throw new Error('Erreur tâches');
     return res.json();
   }
 
   static async getTasks(listId) {
     const res = await fetch(`${API_URL}/api/tasks/${listId}`, { 
-      credentials: 'include' 
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
     });
+    if (!res.ok) throw new Error('Erreur tâches');
     return res.json();
   }
 
   static async createTask(listId, task) {
     const res = await fetch(`${API_URL}/api/tasks/${listId}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       credentials: 'include',
       body: JSON.stringify(task)
     });
@@ -51,7 +71,10 @@ class ApiService {
   static async updateTask(listId, taskId, task) {
     const res = await fetch(`${API_URL}/api/tasks/${listId}/${taskId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       credentials: 'include',
       body: JSON.stringify(task)
     });
@@ -61,15 +84,16 @@ class ApiService {
   static async deleteTask(listId, taskId) {
     const res = await fetch(`${API_URL}/api/tasks/${listId}/${taskId}`, {
       method: 'DELETE',
-      credentials: 'include'
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
     });
     return res.json();
   }
 
-  // Search Console
   static async getSearchConsoleSites() {
     const res = await fetch(`${API_URL}/api/searchconsole/sites`, { 
-      credentials: 'include' 
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
     });
     return res.json();
   }
@@ -77,25 +101,26 @@ class ApiService {
   static async getSearchConsoleData(siteUrl, startDate, endDate) {
     const params = new URLSearchParams({ siteUrl, startDate, endDate });
     const res = await fetch(`${API_URL}/api/searchconsole/data?${params}`, { 
-      credentials: 'include' 
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
     });
     return res.json();
   }
 
-  // Calendar
   static async getCalendarEvents(timeMin, timeMax) {
     const params = new URLSearchParams({ timeMin, timeMax });
     const res = await fetch(`${API_URL}/api/calendar/events?${params}`, { 
-      credentials: 'include' 
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
     });
     return res.json();
   }
 
-  // Stock (Google Sheets)
   static async getStock(spreadsheetId, range) {
     const params = new URLSearchParams({ spreadsheetId, range });
     const res = await fetch(`${API_URL}/api/stock?${params}`, { 
-      credentials: 'include' 
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' }
     });
     return res.json();
   }
@@ -103,7 +128,10 @@ class ApiService {
   static async updateStock(spreadsheetId, range, values) {
     const res = await fetch(`${API_URL}/api/stock`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       credentials: 'include',
       body: JSON.stringify({ spreadsheetId, range, values })
     });

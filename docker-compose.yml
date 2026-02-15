@@ -8,14 +8,12 @@ services:
     container_name: safeapp-backend
     ports:
       - "3000:3000"
+    env_file:
+      - ./backend/.env
     environment:
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_REDIRECT_URI=https://safeapi.superprojetx.com/auth/callback
-      - FRONTEND_URL=https://safe.superprojetx.com
-      - API_URL=https://safeapi.superprojetx.com
-      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
-      - PORT=3000
+      - NODE_ENV=production
+    volumes:
+      - ./backend/.env:/app/.env:ro
     restart: unless-stopped
     networks:
       - safeapp-network
@@ -24,6 +22,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=https://safeapi.superprojetx.com
     container_name: safeapp-frontend
     ports:
       - "3001:80"

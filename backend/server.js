@@ -1,32 +1,49 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const { google } = require('googleapis');
 const session = require('express-session');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+console.log('=== SafeApp Backend Starting ===');
+console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✅ Configuré' : '❌ MANQUANT');
+console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✅ Configuré' : '❌ MANQUANT');
+console.log('GOOGLE_REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+
+// Vérifier les variables requises
+if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  console.error('❌ ERREUR: GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET sont requis!');
+  console.error('Créez un fichier .env avec ces variables.');
+  process.exit(1);
+}
+
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+  origin: process.env.FRONTEND_URL || 'https://safe.superprojetx.com',
   credentials: true
 }));
 app.use(express.json());
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'safeapp-secret-key',
+  secret: process.env.SESSION_SECRET || 'safeapp-secret-change-me',
   resave: false,
-  saveUninitialized: true
+  saveUninitialized: true,
+  cookie: {
+    secure: false, // Mettre à true en HTTPS avec certificat valide
+    maxAge: 24 * 60 * 60 * 1000 // 24h
+  }
 }));
 
 // OAuth2 Client
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/auth/callback'
+  process.env.GOOGLE_REDIRECT_URI || 'https://safeapi.superprojetx.com/auth/callback'
 );
 
-// Scopes pour toutes les APIs Google nécessaires
 const SCOPES = [
   'https://www.googleapis.com/auth/tasks',
   'https://www.googleapis.com/auth/tasks.readonly',
@@ -35,51 +52,49 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly'
 ];
 
-// ===== ROUTES AUTHENTIFICATION =====
+// ===== ROUTES AUTH =====
 
-// URL d'authentification Google
 app.get('/auth/url', (req, res) => {
+  console.log('Generating auth URL...');
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
     include_granted_scopes: true
   });
+  console.log('Auth URL generated');
   res.json({ url });
 });
 
-// Callback OAuth2
 app.get('/auth/callback', async (req, res) => {
   const { code } = req.query;
+  console.log('Auth callback received, code:', code ? 'present' : 'missing');
+  
+  if (!code) {
+    return res.status(400).json({ error: 'Code manquant' });
+  }
+  
   try {
     const { tokens } = await oauth2Client.getToken(code);
     req.session.tokens = tokens;
-    oauth2Client.setCredentials(tokens);
-    res.redirect(process.env.FRONTEND_URL || 'http://localhost:3001');
+    console.log('Tokens obtained successfully');
+    res.redirect(process.env.FRONTEND_URL || 'https://safe.superprojetx.com');
   } catch (error) {
-    console.error('Erreur auth:', error);
-    res.status(500).json({ error: 'Authentication failed' });
+    console.error('Auth callback error:', error);
+    res.status(500).json({ error: 'Authentication failed: ' + error.message });
   }
 });
 
-// Vérifier statut connexion
 app.get('/auth/status', (req, res) => {
-  if (req.session.tokens) {
-    oauth2Client.setCredentials(req.session.tokens);
-    res.json({ connected: true });
-  } else {
-    res.json({ connected: false });
-  }
+  res.json({ connected: !!req.session.tokens });
 });
 
-// Déconnexion
 app.get('/auth/logout', (req, res) => {
   req.session.destroy();
   res.json({ message: 'Déconnecté' });
 });
 
-// ===== ROUTES GOOGLE TASKS =====
+// ===== ROUTES TASKS =====
 
-// Récupérer les listes de tâches
 app.get('/api/tasks/lists', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
@@ -90,12 +105,11 @@ app.get('/api/tasks/lists', async (req, res) => {
     const response = await tasks.tasklists.list();
     res.json(response.data);
   } catch (error) {
-    console.error('Erreur Tasks:', error);
+    console.error('Tasks lists error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Récupérer les tâches d'une liste
 app.get('/api/tasks/:listId', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
@@ -110,12 +124,11 @@ app.get('/api/tasks/:listId', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Erreur Tasks:', error);
+    console.error('Tasks error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Créer une tâche
 app.post('/api/tasks/:listId', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
@@ -129,12 +142,11 @@ app.post('/api/tasks/:listId', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Erreur création tâche:', error);
+    console.error('Create task error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Mettre à jour une tâche
 app.put('/api/tasks/:listId/:taskId', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
@@ -149,12 +161,11 @@ app.put('/api/tasks/:listId/:taskId', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Erreur update tâche:', error);
+    console.error('Update task error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Supprimer une tâche
 app.delete('/api/tasks/:listId/:taskId', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
@@ -168,14 +179,13 @@ app.delete('/api/tasks/:listId/:taskId', async (req, res) => {
     });
     res.json({ message: 'Tâche supprimée' });
   } catch (error) {
-    console.error('Erreur suppression tâche:', error);
+    console.error('Delete task error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// ===== ROUTES GOOGLE SEARCH CONSOLE =====
+// ===== ROUTES SEARCH CONSOLE =====
 
-// Récupérer les sites
 app.get('/api/searchconsole/sites', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
@@ -186,16 +196,16 @@ app.get('/api/searchconsole/sites', async (req, res) => {
     const response = await webmasters.sites.list();
     res.json(response.data);
   } catch (error) {
-    console.error('Erreur Search Console:', error);
+    console.error('Search console sites error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Récupérer les données de performance
 app.get('/api/searchconsole/data', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
   const { siteUrl, startDate, endDate } = req.query;
+  if (!siteUrl) return res.status(400).json({ error: 'siteUrl requis' });
   
   oauth2Client.setCredentials(req.session.tokens);
   const webmasters = google.webmasters({ version: 'v3', auth: oauth2Client });
@@ -212,70 +222,13 @@ app.get('/api/searchconsole/data', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Erreur Search Console data:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ===== ROUTES STOCK (Google Sheets) =====
-
-// Récupérer les données de stock
-app.get('/api/stock', async (req, res) => {
-  if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
-  
-  const { spreadsheetId, range } = req.query;
-  
-  if (!spreadsheetId) {
-    return res.json({ 
-      message: 'Aucun spreadsheet configuré',
-      items: []
-    });
-  }
-  
-  oauth2Client.setCredentials(req.session.tokens);
-  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-  
-  try {
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: range || 'Stock!A:F'
-    });
-    res.json({ 
-      values: response.data.values,
-      range: response.data.range
-    });
-  } catch (error) {
-    console.error('Erreur Sheets:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Mettre à jour le stock
-app.post('/api/stock', async (req, res) => {
-  if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
-  
-  const { spreadsheetId, range, values } = req.body;
-  
-  oauth2Client.setCredentials(req.session.tokens);
-  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-  
-  try {
-    const response = await sheets.spreadsheets.values.append({
-      spreadsheetId,
-      range,
-      valueInputOption: 'RAW',
-      requestBody: { values }
-    });
-    res.json(response.data);
-  } catch (error) {
-    console.error('Erreur Sheets update:', error);
+    console.error('Search console data error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // ===== ROUTES CALENDAR =====
 
-// Récupérer les événements
 app.get('/api/calendar/events', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
@@ -295,20 +248,78 @@ app.get('/api/calendar/events', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Erreur Calendar:', error);
+    console.error('Calendar error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// ===== ROUTE SANTÉ =====
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+// ===== ROUTES STOCK (SHEETS) =====
+
+app.get('/api/stock', async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
+  
+  const { spreadsheetId, range } = req.query;
+  
+  if (!spreadsheetId) {
+    return res.json({ values: [], message: 'Aucun spreadsheet configuré' });
+  }
+  
+  oauth2Client.setCredentials(req.session.tokens);
+  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+  
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: range || 'Stock!A:F'
+    });
+    res.json({ 
+      values: response.data.values,
+      range: response.data.range
+    });
+  } catch (error) {
+    console.error('Sheets error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// Démarrer le serveur
-app.listen(PORT, () => {
-  console.log(`🚀 API SafeApp démarrée sur http://localhost:${PORT}`);
+app.post('/api/stock', async (req, res) => {
+  if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
+  
+  const { spreadsheetId, range, values } = req.body;
+  
+  oauth2Client.setCredentials(req.session.tokens);
+  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+  
+  try {
+    const response = await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range,
+      valueInputOption: 'RAW',
+      requestBody: { values }
+    });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Sheets update error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== HEALTH CHECK =====
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    googleConfigured: !!process.env.GOOGLE_CLIENT_ID
+  });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Erreur serveur interne' });
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
 });
-
-module.exports = app;
