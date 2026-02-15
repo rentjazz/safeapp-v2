@@ -17,7 +17,7 @@ console.log('');
 
 // Middleware
 app.use(cors({
-  origin: config.FRONTEND_URL,
+  origin: [config.FRONTEND_URL, 'http://localhost:3001', 'http://127.0.0.1:3001', 'http://31.97.155.126:3001'],
   credentials: true
 }));
 app.use(express.json());
