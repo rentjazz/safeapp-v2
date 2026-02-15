@@ -1,5 +1,4 @@
 # SafeApp - Docker Compose
-# Variables d'environnement à définir dans l'interface Docker ou via fichier .env
 
 services:
   backend:
@@ -15,27 +14,29 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URI=https://safeapi.superprojetx.com/auth/callback
-      - FRONTEND_URL=https://safe.superprojetx.com
-      - API_URL=https://safeapi.superprojetx.com
-      - SESSION_SECRET=${SESSION_SECRET:-safeapp-default-secret-change-me}
-    restart: unless-stopped
+      - FRONTEND_URL=http://31.97.155.126:3001
+      - API_URL=http://31.97.155.126:3000
+      - SESSION_SECRET=${SESSION_SECRET:-safeapp-secret}
     networks:
       - safeapp-network
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - REACT_APP_API_URL=https://safeapi.superprojetx.com
+        REACT_APP_API_URL: http://31.97.155.126:3000
     container_name: safeapp-frontend
     ports:
       - "3001:80"
+    environment:
+      - REACT_APP_API_URL=http://31.97.155.126:3000
     depends_on:
       - backend
-    restart: unless-stopped
     networks:
       - safeapp-network
+    restart: unless-stopped
 
 networks:
   safeapp-network:
