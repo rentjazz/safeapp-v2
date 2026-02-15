@@ -1,48 +1,49 @@
-require('dotenv').config();
-
 const express = require('express');
 const cors = require('cors');
 const { google } = require('googleapis');
 const session = require('express-session');
+const { config, updateConfig } = require('./config');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = config.PORT;
 
 console.log('=== SafeApp Backend Starting ===');
-console.log('GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? '✅ Configuré' : '❌ MANQUANT');
-console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? '✅ Configuré' : '❌ MANQUANT');
-console.log('GOOGLE_REDIRECT_URI:', process.env.GOOGLE_REDIRECT_URI);
-console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
-
-// Vérifier les variables requises
-if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-  console.error('❌ ERREUR: GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET sont requis!');
-  console.error('Créez un fichier .env avec ces variables.');
-  process.exit(1);
-}
+console.log('NODE_ENV:', config.NODE_ENV);
+console.log('PORT:', config.PORT);
+console.log('GOOGLE_CLIENT_ID:', config.GOOGLE_CLIENT_ID ? '✅ Configuré (' + config.GOOGLE_CLIENT_ID.substring(0, 20) + '...)' : '❌ MANQUANT');
+console.log('GOOGLE_CLIENT_SECRET:', config.GOOGLE_CLIENT_SECRET ? '✅ Configuré' : '❌ MANQUANT');
+console.log('FRONTEND_URL:', config.FRONTEND_URL);
+console.log('');
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'https://safe.superprojetx.com',
+  origin: config.FRONTEND_URL,
   credentials: true
 }));
 app.use(express.json());
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'safeapp-secret-change-me',
+  secret: config.SESSION_SECRET,
   resave: false,
   saveUninitialized: true,
   cookie: {
-    secure: false, // Mettre à true en HTTPS avec certificat valide
-    maxAge: 24 * 60 * 60 * 1000 // 24h
+    secure: false,
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
 // OAuth2 Client
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI || 'https://safeapi.superprojetx.com/auth/callback'
-);
+let oauth2Client = null;
+
+function getOAuthClient() {
+  if (!oauth2Client && config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET) {
+    oauth2Client = new google.auth.OAuth2(
+      config.GOOGLE_CLIENT_ID,
+      config.GOOGLE_CLIENT_SECRET,
+      config.GOOGLE_REDIRECT_URI
+    );
+  }
+  return oauth2Client;
+}
 
 const SCOPES = [
   'https://www.googleapis.com/auth/tasks',
@@ -52,40 +53,91 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.readonly'
 ];
 
+// ===== ROUTE DE CONFIGURATION =====
+// Permet de configurer les credentials via API (pour l'interface Hostinger)
+app.post('/admin/config', express.json(), (req, res) => {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET } = req.body;
+  
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    return res.status(400).json({ error: 'CLIENT_ID et CLIENT_SECRET requis' });
+  }
+  
+  updateConfig({
+    GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET,
+    SESSION_SECRET: SESSION_SECRET || config.SESSION_SECRET
+  });
+  
+  // Recréer le client OAuth
+  oauth2Client = new google.auth.OAuth2(
+    config.GOOGLE_CLIENT_ID,
+    config.GOOGLE_CLIENT_SECRET,
+    config.GOOGLE_REDIRECT_URI
+  );
+  
+  console.log('✅ Configuration mise à jour via API');
+  res.json({ 
+    message: 'Configuration mise à jour',
+    googleConfigured: true 
+  });
+});
+
+// Vérifier la config actuelle (sans exposer les secrets)
+app.get('/admin/config/status', (req, res) => {
+  res.json({
+    googleConfigured: !!(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET),
+    frontendUrl: config.FRONTEND_URL,
+    redirectUri: config.GOOGLE_REDIRECT_URI
+  });
+});
+
 // ===== ROUTES AUTH =====
 
 app.get('/auth/url', (req, res) => {
-  console.log('Generating auth URL...');
-  const url = oauth2Client.generateAuthUrl({
+  const client = getOAuthClient();
+  if (!client) {
+    return res.status(500).json({ 
+      error: 'OAuth non configuré',
+      message: 'GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET manquants. Configurez via /admin/config'
+    });
+  }
+  
+  const url = client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
     include_granted_scopes: true
   });
-  console.log('Auth URL generated');
   res.json({ url });
 });
 
 app.get('/auth/callback', async (req, res) => {
   const { code } = req.query;
-  console.log('Auth callback received, code:', code ? 'present' : 'missing');
+  const client = getOAuthClient();
+  
+  if (!client) {
+    return res.status(500).send('OAuth non configuré');
+  }
   
   if (!code) {
-    return res.status(400).json({ error: 'Code manquant' });
+    return res.status(400).send('Code manquant');
   }
   
   try {
-    const { tokens } = await oauth2Client.getToken(code);
+    const { tokens } = await client.getToken(code);
     req.session.tokens = tokens;
-    console.log('Tokens obtained successfully');
-    res.redirect(process.env.FRONTEND_URL || 'https://safe.superprojetx.com');
+    console.log('✅ Tokens obtenus');
+    res.redirect(config.FRONTEND_URL);
   } catch (error) {
-    console.error('Auth callback error:', error);
-    res.status(500).json({ error: 'Authentication failed: ' + error.message });
+    console.error('❌ Auth callback error:', error.message);
+    res.status(500).send('Authentication failed: ' + error.message);
   }
 });
 
 app.get('/auth/status', (req, res) => {
-  res.json({ connected: !!req.session.tokens });
+  res.json({ 
+    connected: !!req.session.tokens,
+    googleConfigured: !!(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET)
+  });
 });
 
 app.get('/auth/logout', (req, res) => {
@@ -98,14 +150,17 @@ app.get('/auth/logout', (req, res) => {
 app.get('/api/tasks/lists', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const tasks = google.tasks({ version: 'v1', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const tasks = google.tasks({ version: 'v1', auth: client });
   
   try {
     const response = await tasks.tasklists.list();
     res.json(response.data);
   } catch (error) {
-    console.error('Tasks lists error:', error);
+    console.error('Tasks lists error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -113,8 +168,11 @@ app.get('/api/tasks/lists', async (req, res) => {
 app.get('/api/tasks/:listId', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const tasks = google.tasks({ version: 'v1', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const tasks = google.tasks({ version: 'v1', auth: client });
   
   try {
     const response = await tasks.tasks.list({
@@ -124,7 +182,7 @@ app.get('/api/tasks/:listId', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Tasks error:', error);
+    console.error('Tasks error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -132,8 +190,11 @@ app.get('/api/tasks/:listId', async (req, res) => {
 app.post('/api/tasks/:listId', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const tasks = google.tasks({ version: 'v1', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const tasks = google.tasks({ version: 'v1', auth: client });
   
   try {
     const response = await tasks.tasks.insert({
@@ -142,7 +203,7 @@ app.post('/api/tasks/:listId', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Create task error:', error);
+    console.error('Create task error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -150,8 +211,11 @@ app.post('/api/tasks/:listId', async (req, res) => {
 app.put('/api/tasks/:listId/:taskId', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const tasks = google.tasks({ version: 'v1', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const tasks = google.tasks({ version: 'v1', auth: client });
   
   try {
     const response = await tasks.tasks.update({
@@ -161,7 +225,7 @@ app.put('/api/tasks/:listId/:taskId', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Update task error:', error);
+    console.error('Update task error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -169,8 +233,11 @@ app.put('/api/tasks/:listId/:taskId', async (req, res) => {
 app.delete('/api/tasks/:listId/:taskId', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const tasks = google.tasks({ version: 'v1', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const tasks = google.tasks({ version: 'v1', auth: client });
   
   try {
     await tasks.tasks.delete({
@@ -179,7 +246,7 @@ app.delete('/api/tasks/:listId/:taskId', async (req, res) => {
     });
     res.json({ message: 'Tâche supprimée' });
   } catch (error) {
-    console.error('Delete task error:', error);
+    console.error('Delete task error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -189,14 +256,17 @@ app.delete('/api/tasks/:listId/:taskId', async (req, res) => {
 app.get('/api/searchconsole/sites', async (req, res) => {
   if (!req.session.tokens) return res.status(401).json({ error: 'Non authentifié' });
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const webmasters = google.webmasters({ version: 'v3', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const webmasters = google.webmasters({ version: 'v3', auth: client });
   
   try {
     const response = await webmasters.sites.list();
     res.json(response.data);
   } catch (error) {
-    console.error('Search console sites error:', error);
+    console.error('Search console sites error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -207,8 +277,11 @@ app.get('/api/searchconsole/data', async (req, res) => {
   const { siteUrl, startDate, endDate } = req.query;
   if (!siteUrl) return res.status(400).json({ error: 'siteUrl requis' });
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const webmasters = google.webmasters({ version: 'v3', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const webmasters = google.webmasters({ version: 'v3', auth: client });
   
   try {
     const response = await webmasters.searchanalytics.query({
@@ -222,7 +295,7 @@ app.get('/api/searchconsole/data', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Search console data error:', error);
+    console.error('Search console data error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -234,8 +307,11 @@ app.get('/api/calendar/events', async (req, res) => {
   
   const { timeMin, timeMax } = req.query;
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const calendar = google.calendar({ version: 'v3', auth: client });
   
   try {
     const response = await calendar.events.list({
@@ -248,7 +324,7 @@ app.get('/api/calendar/events', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Calendar error:', error);
+    console.error('Calendar error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -264,8 +340,11 @@ app.get('/api/stock', async (req, res) => {
     return res.json({ values: [], message: 'Aucun spreadsheet configuré' });
   }
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const sheets = google.sheets({ version: 'v4', auth: client });
   
   try {
     const response = await sheets.spreadsheets.values.get({
@@ -277,7 +356,7 @@ app.get('/api/stock', async (req, res) => {
       range: response.data.range
     });
   } catch (error) {
-    console.error('Sheets error:', error);
+    console.error('Sheets error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -287,8 +366,11 @@ app.post('/api/stock', async (req, res) => {
   
   const { spreadsheetId, range, values } = req.body;
   
-  oauth2Client.setCredentials(req.session.tokens);
-  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+  const client = getOAuthClient();
+  if (!client) return res.status(500).json({ error: 'OAuth non configuré' });
+  
+  client.setCredentials(req.session.tokens);
+  const sheets = google.sheets({ version: 'v4', auth: client });
   
   try {
     const response = await sheets.spreadsheets.values.append({
@@ -299,7 +381,7 @@ app.post('/api/stock', async (req, res) => {
     });
     res.json(response.data);
   } catch (error) {
-    console.error('Sheets update error:', error);
+    console.error('Sheets update error:', error.message);
     res.status(500).json({ error: error.message });
   }
 });
@@ -309,7 +391,8 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    googleConfigured: !!process.env.GOOGLE_CLIENT_ID
+    googleConfigured: !!(config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET),
+    frontendUrl: config.FRONTEND_URL
   });
 });
 
@@ -322,4 +405,13 @@ app.use((err, req, res, next) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`⚙️  Config status: http://localhost:${PORT}/admin/config/status`);
+  
+  if (!config.GOOGLE_CLIENT_ID || !config.GOOGLE_CLIENT_SECRET) {
+    console.log('');
+    console.log('⚠️  ATTENTION: Configuration Google manquante!');
+    console.log('   Configurez via:');
+    console.log('   - Variables d\'environnement, ou');
+    console.log('   - POST /admin/config { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET }');
+  }
 });
