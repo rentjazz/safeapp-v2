@@ -1,8 +1,10 @@
-version: '3.8'
+# SafeApp - Docker Compose
 
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: safeapp-backend
     ports:
       - "3000:3000"
@@ -11,22 +13,20 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=https://safeapi.superprojetx.com/auth/callback
       - FRONTEND_URL=https://safe.superprojetx.com
-      - SESSION_SECRET=${SESSION_SECRET:-changez-moi-en-production}
+      - API_URL=https://safeapi.superprojetx.com
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-in-production}
       - PORT=3000
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
     restart: unless-stopped
     networks:
       - safeapp-network
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
     container_name: safeapp-frontend
     ports:
       - "3001:80"
-    environment:
-      - REACT_APP_API_URL=https://safeapi.superprojetx.com
     depends_on:
       - backend
     restart: unless-stopped
